@@ -151,7 +151,7 @@ async def start_story(choice: Choice):
         3. 결정을 내려야 하는 구체적인 상황
         4. 이 결정이 가져올 수 있는 잠재적 영향
 
-        주의: {choice.choice_count}번째 선택이 끝나기 전까지는 최종 결과를 출력하지 마세요.
+        "주의: {choice.choice_count}번째 선택이 끝나기 전까지는 절대로 최종 결과를 출력하지 마세요."
 
         {choice.choice_count}번째 선택 후에만 다음 형식의 JSON으로 최종 결과를 출력하세요:
 
@@ -203,10 +203,8 @@ async def make_choice(opt: Opt, choice_number: int):
         character = opt.opt_character
         image_url = generate_image(character, image_prompt)
         
-        if image_url:
-            story_data['image_url'] = image_url
-        else:
-            story_data['image_url'] = "Image generation failed"
+        # 이미지 URL을 응답에 추가
+        story_data['image_url'] = image_url
         
         return FinalResponse(**story_data)
     elif 'story' in story_data:
