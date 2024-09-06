@@ -8,6 +8,7 @@ import json
 
 import openai
 import requests
+import unicodedata
 
 app = FastAPI()
 
@@ -44,6 +45,9 @@ class FinalResponse(BaseModel):
     comparison: Optional[str] = None
     image_url: Optional[str] = None  # 이미지 URL을 저장할 새 필드
 
+def clean_prompt(text):
+    # 유니코드 문자를 ASCII로 변환 또는 제거
+    return ''.join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c)).encode('ascii', 'ignore').decode('ascii')
 
 def generate_image(category, prompt):
     if category == '사도세자':
@@ -51,22 +55,53 @@ def generate_image(category, prompt):
     elif category == '스티브 잡스':
         default_prompt = "Steve jobs, black turtleneck tee"
 
+    # 프롬프트 정제
+    cleaned_prompt = clean_prompt(prompt)
+    cleaned_default_prompt = clean_prompt(default_prompt)
+
     # DALL.E3 이미지 생성을 위한 프롬프트 정의
     prompt_suffix = "in the style of Impressionism, square aspect ratio, no text"
-    full_prompt = f"{prompt}, {default_prompt}, {prompt_suffix}"
+    full_prompt = f"{cleaned_prompt}, {cleaned_default_prompt}, {prompt_suffix}"
 
-    # DALL-E3 이미지 생성
-    response = openai.images.generate(
-        model="dall-e-3",
-        prompt=full_prompt,
-        size="1024x1024",  # 정사각형 이미지 생성
-        quality="standard",
-        n=1,
-    )
+    try:
+        # DALL-E3 이미지 생성
+        response = openai.images.generate(
+            model="dall-e-3",
+            prompt=full_prompt,
+            size="1024x1024",  # 정사각형 이미지 생성
+            quality="standard",
+            n=1,
+        )
 
-    # 이미지 URL 추출
-    image_url = response.data[0].url
-    return image_url
+        # 이미지 URL 추출
+        image_url = response.data[0].url
+        return image_url
+    except Exception as e:
+        print(f"Error generating image: {e}")
+        return None
+
+# def generate_image(category, prompt):
+#     if category == '사도세자':
+#         default_prompt = "korean traditional, korea"
+#     elif category == '스티브 잡스':
+#         default_prompt = "Steve jobs, black turtleneck tee"
+
+#     # DALL.E3 이미지 생성을 위한 프롬프트 정의
+#     prompt_suffix = "in the style of Impressionism, square aspect ratio, no text"
+#     full_prompt = f"{prompt}, {default_prompt}, {prompt_suffix}"
+
+#     # DALL-E3 이미지 생성
+#     response = openai.images.generate(
+#         model="dall-e-3",
+#         prompt=full_prompt,
+#         size="1024x1024",  # 정사각형 이미지 생성
+#         quality="standard",
+#         n=1,
+#     )
+
+#     # 이미지 URL 추출
+#     image_url = response.data[0].url
+#     return image_url
 
 # 전역 변수로 채팅 세션 저장
 chat_session = None
@@ -168,8 +203,10 @@ async def make_choice(opt: Opt, choice_number: int):
         character = opt.opt_character
         image_url = generate_image(character, image_prompt)
         
-        # 이미지 URL을 응답에 추가
-        story_data['image_url'] = image_url
+        if image_url:
+            story_data['image_url'] = image_url
+        else:
+            story_data['image_url'] = "Image generation failed"
         
         return FinalResponse(**story_data)
     elif 'story' in story_data:
