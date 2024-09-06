@@ -6,11 +6,15 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import json
 
+import openai
+import requests
+
 app = FastAPI()
 
 # 환경 변수 로드
 load_dotenv()
 apikey = os.getenv("geminiapi")
+openai.api_key = os.getenv("openaiapi")
 
 # Gemini API 설정
 genai.configure(api_key=apikey)
@@ -21,6 +25,7 @@ class Choice(BaseModel):
     choice_count: int
 
 class Opt(BaseModel):
+    opt_character: Optional[str] = None
     opt_title: str
 
 class StoryResponse(BaseModel):
@@ -37,6 +42,31 @@ class FinalResponse(BaseModel):
     final_scenario: Optional[str] = None
     historical_changes: Optional[str] = None
     comparison: Optional[str] = None
+    image_url: Optional[str] = None  # 이미지 URL을 저장할 새 필드
+
+
+def generate_image(category, prompt):
+    if category == '사도세자':
+        default_prompt = "korean traditional, korea"
+    elif category == '스티브 잡스':
+        default_prompt = "Steve jobs, black turtleneck tee"
+
+    # DALL.E3 이미지 생성을 위한 프롬프트 정의
+    prompt_suffix = "in the style of Impressionism, square aspect ratio, no text"
+    full_prompt = f"{prompt}, {default_prompt}, {prompt_suffix}"
+
+    # DALL-E3 이미지 생성
+    response = openai.images.generate(
+        model="dall-e-3",
+        prompt=full_prompt,
+        size="1024x1024",  # 정사각형 이미지 생성
+        quality="standard",
+        n=1,
+    )
+
+    # 이미지 URL 추출
+    image_url = response.data[0].url
+    return image_url
 
 # 전역 변수로 채팅 세션 저장
 chat_session = None
@@ -133,6 +163,14 @@ async def make_choice(opt: Opt, choice_number: int):
     # story_data = json.loads(response.text)
     # print(story_data)
     if 'final_scenario' in story_data:
+        # 최종 시나리오에 대한 이미지 생성
+        image_prompt = story_data['final_scenario']
+        character = opt.opt_character
+        image_url = generate_image(character, image_prompt)
+        
+        # 이미지 URL을 응답에 추가
+        story_data['image_url'] = image_url
+        
         return FinalResponse(**story_data)
     elif 'story' in story_data:
         return StoryResponse(**story_data)
